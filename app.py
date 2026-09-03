@@ -28,9 +28,9 @@ from llama_index.core.node_parser import SentenceSplitter
 Settings.node_parser = SentenceSplitter(chunk_size=500, chunk_overlap=50)
 retriever = index.as_retriever(similarity_top_k=3)#embed the question, return the nearest Nodes.
 
-response = query_engine.query("truck got the wrong sticker thing at the gate")
-for node in response.source_nodes:
-    print(round(node.score,3),node.text[:120])
+#response = query_engine.query("truck got the wrong sticker thing at the gate")
+#for node in response.source_nodes:
+#    print(round(node.score,3),node.text[:120])
 
 from llama_index.core.workflow import (
     Workflow, Context, Event, StartEvent, StopEvent, step,
@@ -51,3 +51,24 @@ class RewriteEvent(Event):
 #GenerateEvent ("Write the report"): If the pages passed the quality check, this signal flashes. It tells the helper: "We have great info! Go ahead and draft the final answer."
 class GenerateEvent(Event):
     chunks: list[str]
+
+#Workflow Execution Path
+
+
+class SelfCorrectingRAG(Workflow):
+
+    @step
+    async def begin(self, ctx: Context, ev: StartEvent)-> RetrieveEvent:
+        await ctx.store("original", ev.question)
+        await ctx.store("attempts", 0)
+        return RetrieveEvent(question=ev.question)
+
+    @step
+    async def retrieve(self, ctx: Context, ev: RetrieveEvent) -> GradeEvent:
+        attempts = await ctx.store.get("attempts")#Get the number of attempts made so far from the context store.
+        await ctx.store.set("attempts", attempts + 1)
+        await ctx.store.set("question", ev.question)
+
+        nodes = await retriever.aretrieve(ev.question)
+        print(f"Retrieved {len(nodes)} nodes for question: {ev.question}, attempts: {attempts + 1}")
+        return GradeEvent(chunks=[n.text for n in nodes])
