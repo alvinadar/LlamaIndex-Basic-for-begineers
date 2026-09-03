@@ -1,76 +1,61 @@
-import asyncio#Non Blocking IO, allows the program to handle multiple tasks concurrently.
-#Standard library for asynchronous programming in Python. It provides an event loop, coroutines, and tasks to manage asynchronous operations.
-
-
-from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings
-from llama_index.llms.google_genai import GoogleGenAI
-from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
+import asyncio
 from dotenv import load_dotenv
 
-load_dotenv()  # Load environment variables from .env file
-
-Settings.llm = GoogleGenAI(model="gemini-2.5-flash")
-Settings.embed_model = GoogleGenAIEmbedding(model_name="gemini-embedding-001")
-
-documents = SimpleDirectoryReader(input_files=["OPS_MANUAL_logistics_SOP.md"]).load_data()
-index = VectorStoreIndex.from_documents(documents)
-
-#Wraps the index as a question-answering-object that can be queried with natural language questions.
-#1.Embeds the question into a vector representation.
-#2.Retrieves the most relevant documents from the index based on the embedded question.
-#3.SUFF THOSE CHUNKS INTO A PROMPT AND SENDS IT TO THE LLM FOR ANSWERING.
-#4.RETURNS THE GENERATED ANSWER TO THE USER.
-query_engine = index.as_query_engine()
-
-#Setting.node_parser is a global splitter , Llamaindex uses when it turns documents into nodes(Inside Ventor Store Index)
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings
 from llama_index.core.node_parser import SentenceSplitter
-#Chuck_overlap: Repeat the last ~50 units of the previous chunk at the start of the next. Stops a sentence that straddles a cut from disappearing.
-Settings.node_parser = SentenceSplitter(chunk_size=500, chunk_overlap=50)
-retriever = index.as_retriever(similarity_top_k=3)#embed the question, return the nearest Nodes.
-
-#response = query_engine.query("truck got the wrong sticker thing at the gate")
-#for node in response.source_nodes:
-#    print(round(node.score,3),node.text[:120])
-
 from llama_index.core.workflow import (
     Workflow, Context, Event, StartEvent, StopEvent, step,
 )
+from llama_index.llms.google_genai import GoogleGenAI
+from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 
-#RetrieveEvent ("Search the library"): The helper takes your question and pulls a stack of relevant books from the shelf.
+load_dotenv()          
+
+Settings.llm = GoogleGenAI(model="gemini-2.5-flash")
+Settings.embed_model = GoogleGenAIEmbedding(model_name="gemini-embedding-001")
+Settings.node_parser = SentenceSplitter(chunk_size=500, chunk_overlap=50)
+
+documents = SimpleDirectoryReader(input_files=["OPS_MANUAL.md"]).load_data()
+index = VectorStoreIndex.from_documents(documents)   # chunk + embed + store
+retriever = index.as_retriever(similarity_top_k=3)
+
+print(f"Indexed {len(documents)} document(s)")
+
+
 class RetrieveEvent(Event):
-    question: str        # the question being searched RIGHT NOW
+    question: str            # the question being searched RIGHT NOW
 
-#GradeEvent ("Check quality"): They skim the pages they found to see if the information actually answers your question or if it is just irrelevant filler.
 class GradeEvent(Event):
     chunks: list[str]
 
-#RewriteEvent ("Try again"): If the pages were useless, this signal flashes. It tells the helper: "These sources suck. Rethink how we asked the question and go search again."
 class RewriteEvent(Event):
-    pass                 # carries nothing. it only means "try again".
+    pass                     # carries nothing. it only means "try again".
 
-#GenerateEvent ("Write the report"): If the pages passed the quality check, this signal flashes. It tells the helper: "We have great info! Go ahead and draft the final answer."
 class GenerateEvent(Event):
     chunks: list[str]
 
-#Workflow Execution Path
 
+# ----------------------------------------------------------------------
+# STEPS - each is an async method. One job each.
+# ----------------------------------------------------------------------
 
 class SelfCorrectingRAG(Workflow):
 
     @step
-    async def begin(self, ctx: Context, ev: StartEvent)-> RetrieveEvent:
-        await ctx.store("original", ev.question)
-        await ctx.store("attempts", 0)
+    async def begin(self, ctx: Context, ev: StartEvent) -> RetrieveEvent:
+        """Put the things that must survive the loop into the Context."""
+        await ctx.store.set("original", ev.question)   # never changes
+        await ctx.store.set("attempts", 0)             # the loop guard
         return RetrieveEvent(question=ev.question)
 
     @step
     async def retrieve(self, ctx: Context, ev: RetrieveEvent) -> GradeEvent:
-        attempts = await ctx.store.get("attempts")#Get the number of attempts made so far from the context store.
+        attempts = await ctx.store.get("attempts")
         await ctx.store.set("attempts", attempts + 1)
         await ctx.store.set("question", ev.question)
 
         nodes = await retriever.aretrieve(ev.question)
-        print(f"Retrieved {len(nodes)} nodes for question: {ev.question}, attempts: {attempts + 1}")
+        print(f"  [retrieve] attempt {attempts + 1} -> {len(nodes)} nodes")
         return GradeEvent(chunks=[n.text for n in nodes])
 
     @step
@@ -123,12 +108,10 @@ Return only the rewritten question."""
         )).strip()
 
         print(f"  [rewrite] -> {better}")
-        return RetrieveEvent(question=better) 
+        return RetrieveEvent(question=better)          # <-- the loop
 
     @step
-    async def grade(
-        self, ctx: Context, ev: GradeEvent) -> StopEvent:
-
+    async def generate(self, ctx: Context, ev: GenerateEvent) -> StopEvent:
         original = await ctx.store.get("original")
         context_text = "\n\n".join(ev.chunks)
 
@@ -143,3 +126,23 @@ MANUAL EXTRACTS:
 QUESTION: {original}"""
         )
         return StopEvent(result=str(answer).strip())
+
+
+async def ask(question: str) -> str:
+    workflow = SelfCorrectingRAG(timeout=120, verbose=False)
+    print(f"\nQ: {question}")
+    answer = await workflow.run(question=question)
+    print(f"A: {answer}\n")
+    return answer
+
+
+async def main():
+    await ask("Seal number doesn't match the ASN. What do I do?")   # 1 lap
+    await ask("truck got the wrong sticker thing at the gate")      # rewrites, then answers
+    await ask("What is the annual leave policy?")                   # gives up honestly
+
+
+if __name__ == "__main__":
+
+
+    asyncio.run(main())
