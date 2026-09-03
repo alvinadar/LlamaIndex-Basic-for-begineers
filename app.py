@@ -32,3 +32,22 @@ response = query_engine.query("truck got the wrong sticker thing at the gate")
 for node in response.source_nodes:
     print(round(node.score,3),node.text[:120])
 
+from llama_index.core.workflow import (
+    Workflow, Context, Event, StartEvent, StopEvent, step,
+)
+
+#RetrieveEvent ("Search the library"): The helper takes your question and pulls a stack of relevant books from the shelf.
+class RetrieveEvent(Event):
+    question: str        # the question being searched RIGHT NOW
+
+#GradeEvent ("Check quality"): They skim the pages they found to see if the information actually answers your question or if it is just irrelevant filler.
+class GradeEvent(Event):
+    chunks: list[str]
+
+#RewriteEvent ("Try again"): If the pages were useless, this signal flashes. It tells the helper: "These sources suck. Rethink how we asked the question and go search again."
+class RewriteEvent(Event):
+    pass                 # carries nothing. it only means "try again".
+
+#GenerateEvent ("Write the report"): If the pages passed the quality check, this signal flashes. It tells the helper: "We have great info! Go ahead and draft the final answer."
+class GenerateEvent(Event):
+    chunks: list[str]
