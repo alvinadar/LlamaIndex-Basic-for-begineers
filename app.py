@@ -72,3 +72,55 @@ class SelfCorrectingRAG(Workflow):
         nodes = await retriever.aretrieve(ev.question)
         print(f"Retrieved {len(nodes)} nodes for question: {ev.question}, attempts: {attempts + 1}")
         return GradeEvent(chunks=[n.text for n in nodes])
+
+    @step
+    async def grade(
+        self, ctx: Context, ev: GradeEvent
+    ) -> GenerateEvent | RewriteEvent | StopEvent:
+        """One yes/no call decides which of three roads we take.
+        The union return type IS the fork. There is no router function."""
+        original = await ctx.store.get("original")
+        context_text = "\n\n".join(ev.chunks)
+
+        verdict = str(await Settings.llm.acomplete(
+            f"""EXTRACTS:
+{context_text}
+
+QUESTION: {original}
+
+Can the question be answered using ONLY these extracts?
+Reply with one word: YES or NO."""
+        )).strip().upper()
+
+        print(f"  [grade] relevant = {verdict.startswith('YES')}")
+
+        if verdict.startswith("YES"):
+            return GenerateEvent(chunks=ev.chunks)
+
+        attempts = await ctx.store.get("attempts")
+        if attempts >= 3:                              # the ceiling
+            return StopEvent(result=(
+                "Not in the operations manual - escalate to the duty supervisor. "
+                f"(Searched {attempts} times.)"
+            ))
+
+        return RewriteEvent()
+
+    @step
+    async def rewrite(self, ctx: Context, ev: RewriteEvent) -> RetrieveEvent:
+        """Bad chunks usually mean a badly worded search, not a missing document."""
+        original = await ctx.store.get("original")
+        last = await ctx.store.get("question")
+
+        better = str(await Settings.llm.acomplete(
+            f"""The search below returned nothing useful from an operations manual.
+
+ORIGINAL QUESTION: {original}
+LAST SEARCH USED: {last}
+
+Rewrite it using the vocabulary a formal SOP document would use.
+Return only the rewritten question."""
+        )).strip()
+
+        print(f"  [rewrite] -> {better}")
+        return RetrieveEvent(question=better) 
