@@ -124,3 +124,22 @@ Return only the rewritten question."""
 
         print(f"  [rewrite] -> {better}")
         return RetrieveEvent(question=better) 
+
+    @step
+    async def grade(
+        self, ctx: Context, ev: GradeEvent) -> StopEvent:
+
+        original = await ctx.store.get("original")
+        context_text = "\n\n".join(ev.chunks)
+
+        answer = await Settings.llm.acomplete(
+            f"""You are an operations assistant for a warehouse team.
+
+Answer using ONLY the manual extracts below. Be brief.
+
+MANUAL EXTRACTS:
+{context_text}
+
+QUESTION: {original}"""
+        )
+        return StopEvent(result=str(answer).strip())
