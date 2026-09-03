@@ -1,0 +1,482 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LlamaIndex in 90 Minutes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EDEAE7;
+  --ink:#2D2E27;
+  --mut:#595959;
+  --red:#FF0000;
+  --card:#F7F5F3;
+  --line:#D8D3CE;
+  --line2:#C9C3BC;
+  --code:#FBFAF9;
+  --f:"Comfortaa",system-ui,sans-serif;
+  --m:"JetBrains Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#CFC9C3}
+body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px;font-family:var(--f)}
+
+.deck{width:min(1180px,96vw);aspect-ratio:16/9;position:relative;border-radius:4px;overflow:hidden;
+  box-shadow:0 24px 60px -22px rgba(0,0,0,.45);container-type:inline-size;background:var(--bg)}
+.slide{position:absolute;inset:0;padding:4.4cqw 5.6cqw 4cqw;display:none;flex-direction:column;
+  background:var(--bg);color:var(--ink)}
+.slide.on{display:flex;animation:in .32s ease}
+@keyframes in{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.slide.on{animation:none}}
+
+h1{font-size:4.4cqw;font-weight:700;text-align:center;margin:0 0 1.4cqw;letter-spacing:-.01em;
+  text-decoration:underline;text-underline-offset:.55cqw;text-decoration-thickness:.16cqw}
+h2{font-size:2.9cqw;font-weight:400;text-align:center;margin:0 0 3.2cqw;letter-spacing:-.005em}
+h2 b{font-weight:700;color:var(--red)}
+h3{font-size:1.7cqw;font-weight:700;margin:0 0 .9cqw}
+
+p{font-size:1.48cqw;line-height:1.68;color:var(--ink);margin:0 0 1.7cqw;font-weight:400}
+p:last-child{margin-bottom:0}
+b{font-weight:700}
+.r{color:var(--red);font-weight:700}
+.sub{color:var(--mut);font-weight:400}
+.center{text-align:center}
+.mono{font-family:var(--m)}
+
+ol{margin:0;padding-left:2.4cqw;display:flex;flex-direction:column;gap:1.5cqw}
+ul{margin:0;padding-left:2.2cqw;display:flex;flex-direction:column;gap:1.4cqw}
+li{font-size:1.48cqw;line-height:1.62;font-weight:400}
+li::marker{font-weight:700}
+
+.grid{display:grid;gap:1.5cqw}
+.g2{grid-template-columns:1fr 1fr}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:4px;padding:1.9cqw 2cqw}
+.card p{font-size:1.3cqw;margin:0;line-height:1.6}
+.card .k{font-size:1.22cqw;font-weight:700;margin-bottom:.9cqw}
+.card.hot .k,.card.bad .k{color:var(--red)}
+.card.bad{background:#FBF2F1;border-color:#E8CFCC}
+
+.stat{font-size:4.4cqw;font-weight:700;line-height:1;color:var(--red);text-align:center}
+.stat.g{color:var(--ink)}
+.statlab{font-size:1.16cqw;color:var(--mut);text-align:center;margin-top:.8cqw;line-height:1.5}
+
+/* pipeline */
+.pipe{display:flex;gap:.6cqw;margin:1cqw 0 2.2cqw;align-items:stretch}
+.step{flex:1;background:#fff;border:1px solid var(--line2);border-radius:4px;padding:1.1cqw .5cqw;text-align:center}
+.step .n{font-family:var(--m);font-size:.9cqw;color:var(--mut)}
+.step .t{font-size:1.08cqw;font-weight:700;margin-top:.35cqw}
+.step.act{border-color:var(--red)}
+.step.act .t{color:var(--red)}
+.step.act .n{color:var(--red)}
+.step.loop{border-style:dashed;border-color:var(--red);background:#FBF2F1}
+
+/* table */
+table{width:100%;border-collapse:collapse}
+th{font-size:1.15cqw;font-weight:700;text-align:left;padding:.9cqw 1.1cqw;border-bottom:1.5px solid var(--ink)}
+td{font-size:1.28cqw;padding:1cqw 1.1cqw;border-bottom:1px solid var(--line);line-height:1.5;vertical-align:top}
+td:first-child{font-weight:700;width:24%}
+td:nth-child(2){width:26%;font-weight:700}
+.rules{color:var(--ink)} .ai{color:var(--red)}
+
+/* code */
+pre{background:var(--code);border:1px solid var(--line2);border-radius:4px;
+  padding:1.6cqw 1.9cqw;font-family:var(--m);font-size:1.1cqw;line-height:1.72;color:#2D2E27;
+  margin:0;overflow:auto}
+pre.tight{font-size:1cqw;line-height:1.62}
+.k{color:#A31515;font-weight:500}
+.s{color:#0A7A3D}
+.c{color:#8A8078;font-style:italic}
+.fn{color:#1B5FA8;font-weight:500}
+.n{color:#B5560E}
+
+/* chat */
+.chat{display:flex;flex-direction:column;gap:.9cqw;background:var(--card);
+  border:1px solid var(--line);border-radius:4px;padding:1.6cqw 1.8cqw}
+.ts{font-family:var(--m);font-size:.95cqw;color:var(--mut)}
+.msg{font-size:1.28cqw;line-height:1.5;padding:.85cqw 1.3cqw;border-radius:4px;max-width:78%}
+.them{background:#fff;border:1px solid var(--line2);align-self:flex-start}
+.us{background:#EAF2E8;border:1px solid #C6D8C2;align-self:flex-end}
+.us.wrong{background:#FBF2F1;border-color:#E8CFCC}
+
+.cover{justify-content:center;align-items:center;text-align:center}
+.cover h1{font-size:5.4cqw;margin-bottom:2.2cqw}
+.cover .tagline{font-size:1.75cqw;color:var(--mut);max-width:46ch;line-height:1.6}
+.cover .meta{margin-top:3.4cqw;font-family:var(--m);font-size:1.1cqw;color:var(--mut);letter-spacing:.1em}
+
+.num{position:absolute;right:2.2cqw;bottom:1.6cqw;font-family:var(--m);font-size:1cqw;color:#A9A29B}
+.note{font-size:1.3cqw;color:var(--mut);margin-top:1.6cqw;line-height:1.6}
+
+/* nav */
+.bar{width:min(1180px,96vw);display:flex;align-items:center;gap:12px}
+.bar button{font-family:var(--f);font-size:12px;font-weight:600;background:#F7F5F3;color:#2D2E27;
+  border:1px solid #C9C3BC;border-radius:4px;padding:8px 14px;cursor:pointer}
+.bar button:hover{background:#fff}
+.prog{flex:1;height:3px;background:#DDD8D3;border-radius:3px;overflow:hidden}
+.prog i{display:block;height:100%;background:var(--red);transition:width .3s}
+.hint{font-size:11px;color:#7C756E;font-family:var(--m)}
+:focus-visible{outline:2px solid var(--red);outline-offset:3px}
+</style>
+
+<div class="deck" id="deck">
+
+<!-- 1 -->
+<section class="slide cover on">
+  <h1>LlamaIndex in 90 Minutes</h1>
+  <p class="tagline">Last week you wrote fifty lines of RAG by hand. Today it takes <b>five</b> — and then we open them back up, because five lines can't loop.</p>
+  <div class="meta">INDEX · RETRIEVER · EVENTS · WORKFLOWS</div>
+  <div class="num">1</div>
+</section>
+
+<!-- 2 -->
+<section class="slide">
+  <h2>Agenda</h2>
+  <ol>
+    <li><b>Five lines</b> — the whole of last week's script, rewritten. You are allowed to be annoyed.</li>
+    <li><b>What those lines hid</b> — documents, nodes, index, retriever. Take the controls back one at a time.</li>
+    <li><b>Break it</b> — one badly worded question refuses an answer that is in the manual.</li>
+    <li><b>Workflows</b> — events, steps, context, and a pipeline that searches again instead of giving up.</li>
+  </ol>
+  <p class="note"><b>You need:</b> last week's <span class="mono">OPS_MANUAL.md</span>, your Gemini key, and one install line. Everything else you already know.</p>
+  <div class="num">2</div>
+</section>
+
+<!-- 3 -->
+<section class="slide">
+  <h2>Last week, <b>in five lines</b></h2>
+  <pre><span class="k">from</span> llama_index.core <span class="k">import</span> VectorStoreIndex, SimpleDirectoryReader, Settings
+<span class="k">from</span> llama_index.llms.google_genai <span class="k">import</span> GoogleGenAI
+<span class="k">from</span> llama_index.embeddings.google_genai <span class="k">import</span> GoogleGenAIEmbedding
+
+Settings.llm = <span class="fn">GoogleGenAI</span>(model=<span class="s">"gemini-2.5-flash"</span>)
+Settings.embed_model = <span class="fn">GoogleGenAIEmbedding</span>(model_name=<span class="s">"gemini-embedding-001"</span>)
+
+documents = <span class="fn">SimpleDirectoryReader</span>(input_files=[<span class="s">"OPS_MANUAL.md"</span>]).<span class="fn">load_data</span>()
+index = VectorStoreIndex.<span class="fn">from_documents</span>(documents)
+query_engine = index.<span class="fn">as_query_engine</span>()
+
+<span class="fn">print</span>(query_engine.<span class="fn">query</span>(<span class="s">"Seal doesn't match the ASN. What do I do?"</span>))</pre>
+  <p class="note">Chunking, embedding, storing, retrieving, prompting — <b>all of it, gone into three objects.</b> Same answer you got last week.</p>
+  <div class="num">3</div>
+</section>
+
+<!-- 4 -->
+<section class="slide">
+  <h2>So was last week <b>a waste?</b></h2>
+  <p>No — and this is the only slide today with no code on it, so listen to this one.</p>
+  <div class="grid g2">
+    <div class="card hot"><div class="k">You can trust these five lines</div><p>Because you know exactly what each one replaced. When a score looks wrong or an answer goes strange, <b>you know which stage to open.</b></p></div>
+    <div class="card bad"><div class="k">Someone who starts here cannot</div><p>They have a working app and no model of it. The first time it misbehaves, their only move is to change the prompt and hope.</p></div>
+  </div>
+  <p class="note" style="margin-top:2.4cqw"><b>A framework is a set of defaults you have earned the right to accept.</b> Today you learn which defaults LlamaIndex picked for you, and how to take each one back.</p>
+  <div class="num">4</div>
+</section>
+
+<!-- 5 -->
+<section class="slide">
+  <h2>What the five lines <b>hid</b></h2>
+  <div class="pipe">
+    <div class="step"><div class="n">01</div><div class="t">Document</div></div>
+    <div class="step"><div class="n">02</div><div class="t">Node</div></div>
+    <div class="step act"><div class="n">03</div><div class="t">Index</div></div>
+    <div class="step act"><div class="n">04</div><div class="t">Retriever</div></div>
+    <div class="step"><div class="n">05</div><div class="t">Query engine</div></div>
+  </div>
+  <table>
+    <thead><tr><th>Stage</th><th>Last week you wrote</th><th>What it is</th></tr></thead>
+    <tbody>
+      <tr><td>Document</td><td class="rules mono">open().read()</td><td>One loaded file.</td></tr>
+      <tr><td>Node</td><td class="rules mono">chunk_text()</td><td>One chunk of that file.</td></tr>
+      <tr><td>Index</td><td class="rules mono">embed_content + add()</td><td>Every node embedded and stored.</td></tr>
+      <tr><td>Retriever</td><td class="rules mono">collection.query(k=3)</td><td>Top-k nodes for a question.</td></tr>
+      <tr><td>Query engine</td><td class="rules mono">your f-string prompt</td><td>Retriever + prompt + LLM.</td></tr>
+    </tbody>
+  </table>
+  <div class="num">5</div>
+</section>
+
+<!-- 6 -->
+<section class="slide">
+  <h2>Read this slide <b>twice</b></h2>
+  <div class="grid g2">
+    <div class="card bad"><div class="k">What you will assume</div><p>“Node = a step in my program.” Every graph framework you have ever seen uses the word that way, so your brain will supply it for free.</p></div>
+    <div class="card hot"><div class="k">What it actually means</div><p><b>A Node is a chunk of your document.</b> A piece of text with an embedding and some metadata. Nothing to do with program flow.</p></div>
+  </div>
+  <p class="note" style="margin-top:2.6cqw"><span class="r">Node = piece of text. Step = piece of code.</span> Get this wrong now and every error message for the next hour will read like nonsense. <span class="mono">source_nodes</span>, <span class="mono">node_parser</span>, <span class="mono">NodeWithScore</span> — all of them mean text.</p>
+  <div class="num">6</div>
+</section>
+
+<!-- 7 -->
+<section class="slide">
+  <h2>Take the controls <b>back</b></h2>
+  <pre><span class="k">from</span> llama_index.core.node_parser <span class="k">import</span> SentenceSplitter
+
+Settings.node_parser = <span class="fn">SentenceSplitter</span>(chunk_size=<span class="n">500</span>, chunk_overlap=<span class="n">50</span>)
+retriever = index.<span class="fn">as_retriever</span>(similarity_top_k=<span class="n">3</span>)
+
+<span class="c"># show your work - the habit survives the framework</span>
+response = query_engine.<span class="fn">query</span>(<span class="s">"Seal doesn't match the ASN. What do I do?"</span>)
+<span class="k">for</span> node <span class="k">in</span> response.source_nodes:
+    <span class="fn">print</span>(<span class="fn">round</span>(node.score, <span class="n">3</span>), node.text[:<span class="n">120</span>])</pre>
+  <p class="note"><b>Try it:</b> <span class="mono">chunk_size=100</span>, then <span class="mono">2000</span>. Small chunks are specific, big chunks are complete. <span class="r">There is no correct answer</span> — which is exactly why the framework let you change it.</p>
+  <div class="num">7</div>
+</section>
+
+<!-- 8 -->
+<section class="slide">
+  <h2>Same clerk. <b>Worse typing.</b></h2>
+  <p>The seal procedure is in the manual — you proved that twice now. Ask it the way a tired person at a gate actually types.</p>
+  <div class="chat">
+    <div class="ts">23:04 — the question a real user asks</div>
+    <div class="msg them">“truck got the wrong sticker thing at the gate”</div>
+    <div class="ts">23:04 — the retriever returns 3 nodes about pallet labelling</div>
+    <div class="msg us wrong">“Not in the operations manual - escalate to the duty supervisor.”</div>
+    <div class="ts">23:05 — but OPS-201 says exactly what to do. It was two shelves away.</div>
+  </div>
+  <p class="note">The manual was fine. The retriever was fine. <b>The question was bad</b> — and <span class="mono">query_engine.query()</span> has nowhere to put a second attempt.</p>
+  <div class="num">8</div>
+</section>
+
+<!-- 9 -->
+<section class="slide">
+  <h2>What would <b>you</b> have done?</h2>
+  <p>Reworded it and searched again. Obvious, human, and impossible in one function call — because a query engine only moves forward.</p>
+  <div class="grid g2">
+    <div class="card bad"><div class="k">A query engine</div><p>retrieve → answer → done. Every question takes the same road at the same speed, whether the search worked or not. <b>No looking back.</b></p></div>
+    <div class="card hot"><div class="k">A Workflow</div><p>retrieve → <b>check</b> → and now there is a fork: answer it, or go back and search differently. <b>Loops are legal.</b></p></div>
+  </div>
+  <p class="note" style="margin-top:2.4cqw"><b>Five lines are a demo. The loop is the product.</b> Everything for the next 45 minutes is building that one arrow backwards.</p>
+  <div class="num">9</div>
+</section>
+
+<!-- 10 -->
+<section class="slide">
+  <h2>Three words, <b>then you know it</b></h2>
+  <div class="grid g3">
+    <div class="card"><div class="k">Event</div><p>A message with data in it — and the thing that decides what runs next.</p></div>
+    <div class="card"><div class="k">Step</div><p>An async method. Accepts one event type, returns another. One job each.</p></div>
+    <div class="card hot"><div class="k">Context</div><p>The shared store that survives across steps <b>and across loops</b>.</p></div>
+  </div>
+  <p class="note" style="margin-top:2.6cqw">Then the sentence that makes the whole framework click: <span class="r">there are no edges.</span> You never wire steps together. A step returns an event, and whichever step <b>accepts that event type</b> runs next. <b>The type hints are the wiring.</b></p>
+  <div class="num">10</div>
+</section>
+
+<!-- 11 -->
+<section class="slide">
+  <h2>Define the <b>events</b> first</h2>
+  <pre><span class="k">from</span> llama_index.core.workflow <span class="k">import</span> (
+    Workflow, Context, Event, StartEvent, StopEvent, step,
+)
+
+<span class="k">class</span> <span class="fn">RetrieveEvent</span>(Event):
+    question: str        <span class="c"># the question being searched RIGHT NOW</span>
+
+<span class="k">class</span> <span class="fn">GradeEvent</span>(Event):
+    chunks: list[str]
+
+<span class="k">class</span> <span class="fn">RewriteEvent</span>(Event):
+    <span class="k">pass</span>                 <span class="c"># carries nothing. it only means "try again".</span>
+
+<span class="k">class</span> <span class="fn">GenerateEvent</span>(Event):
+    chunks: list[str]</pre>
+  <p class="note"><b>Design the events and you have designed the program.</b> Sketch these four on paper before writing a single step — the steps almost write themselves afterwards.</p>
+  <div class="num">11</div>
+</section>
+
+<!-- 12 -->
+<section class="slide">
+  <h2>The first two <b>steps</b></h2>
+  <pre class="tight"><span class="k">class</span> <span class="fn">SelfCorrectingRAG</span>(Workflow):
+
+    <span class="fn">@step</span>
+    <span class="k">async def</span> <span class="fn">begin</span>(self, ctx: Context, ev: StartEvent) -&gt; RetrieveEvent:
+        <span class="k">await</span> ctx.store.<span class="fn">set</span>(<span class="s">"original"</span>, ev.question)   <span class="c"># never changes</span>
+        <span class="k">await</span> ctx.store.<span class="fn">set</span>(<span class="s">"attempts"</span>, <span class="n">0</span>)             <span class="c"># the loop guard</span>
+        <span class="k">return</span> <span class="fn">RetrieveEvent</span>(question=ev.question)
+
+    <span class="fn">@step</span>
+    <span class="k">async def</span> <span class="fn">retrieve</span>(self, ctx: Context, ev: RetrieveEvent) -&gt; GradeEvent:
+        attempts = <span class="k">await</span> ctx.store.<span class="fn">get</span>(<span class="s">"attempts"</span>)
+        <span class="k">await</span> ctx.store.<span class="fn">set</span>(<span class="s">"attempts"</span>, attempts + <span class="n">1</span>)
+        <span class="k">await</span> ctx.store.<span class="fn">set</span>(<span class="s">"question"</span>, ev.question)
+        nodes = <span class="k">await</span> retriever.<span class="fn">aretrieve</span>(ev.question)
+        <span class="k">return</span> <span class="fn">GradeEvent</span>(chunks=[n.text <span class="k">for</span> n <span class="k">in</span> nodes])</pre>
+  <p class="note"><b>Rule 1 — anything that must survive the loop goes in Context</b>, not in an event. Events are for this hop. Context is for the whole run. <span class="r">Rule 2 — ctx.store is async. Every get and set is awaited.</span></p>
+  <div class="num">12</div>
+</section>
+
+<!-- 13 -->
+<section class="slide">
+  <h2>The grader: <b>the return type is the fork</b></h2>
+  <pre class="tight">    <span class="fn">@step</span>
+    <span class="k">async def</span> <span class="fn">grade</span>(
+        self, ctx: Context, ev: GradeEvent
+    ) -&gt; GenerateEvent | RewriteEvent:
+        original = <span class="k">await</span> ctx.store.<span class="fn">get</span>(<span class="s">"original"</span>)
+        verdict = <span class="fn">str</span>(<span class="k">await</span> Settings.llm.<span class="fn">acomplete</span>(
+            <span class="s">f"""EXTRACTS:</span>
+<span class="s">{chunks_text}</span>
+
+<span class="s">QUESTION: {original}</span>
+
+<span class="s">Can the question be answered using ONLY these extracts?</span>
+<span class="s">Reply with one word: YES or NO."""</span>)).<span class="fn">strip</span>().<span class="fn">upper</span>()
+
+        <span class="k">if</span> verdict.<span class="fn">startswith</span>(<span class="s">"YES"</span>):
+            <span class="k">return</span> <span class="fn">GenerateEvent</span>(chunks=ev.chunks)
+        <span class="k">return</span> <span class="fn">RewriteEvent</span>()</pre>
+  <p class="note"><b>No router function, no mapping dict, no edges.</b> The union in the return annotation is what tells the workflow this step has two exits — and <span class="mono">if/return</span> is what picks one.</p>
+  <div class="num">13</div>
+</section>
+
+<!-- 14 -->
+<section class="slide">
+  <h2>One line makes it a <b>loop</b></h2>
+  <pre>    <span class="fn">@step</span>
+    <span class="k">async def</span> <span class="fn">rewrite</span>(self, ctx: Context, ev: RewriteEvent) -&gt; RetrieveEvent:
+        original = <span class="k">await</span> ctx.store.<span class="fn">get</span>(<span class="s">"original"</span>)
+        last     = <span class="k">await</span> ctx.store.<span class="fn">get</span>(<span class="s">"question"</span>)
+        better = <span class="fn">str</span>(<span class="k">await</span> Settings.llm.<span class="fn">acomplete</span>(
+            <span class="s">f"""ORIGINAL: {original}</span>
+<span class="s">LAST SEARCH: {last}</span>
+<span class="s">Rewrite it using the vocabulary a formal SOP document would use."""</span>)).<span class="fn">strip</span>()
+        <span class="k">return</span> <span class="fn">RetrieveEvent</span>(question=better)      <span class="c"># &lt;-- the loop</span></pre>
+  <div class="pipe" style="margin-top:2cqw">
+    <div class="step"><div class="n">01</div><div class="t">Retrieve</div></div>
+    <div class="step act"><div class="n">02</div><div class="t">Grade</div></div>
+    <div class="step loop"><div class="n">03</div><div class="t">Rewrite ↺</div></div>
+    <div class="step"><div class="n">04</div><div class="t">Generate</div></div>
+  </div>
+  <p class="note"><b>Point at the return line.</b> A step handed back an event an earlier step already accepts — and that is the entire loop. Nothing was wired, nothing was declared.</p>
+  <div class="num">14</div>
+</section>
+
+<!-- 15 -->
+<section class="slide">
+  <h2>It <b>works</b> — watch it work</h2>
+  <div class="grid g2">
+    <div class="card"><div class="k">Lap 1 — “truck got the wrong sticker thing”</div><p>Three nodes about pallet labelling. Grader says <b>NO</b>. Out comes a <span class="mono">RewriteEvent</span>.</p></div>
+    <div class="card hot"><div class="k">Lap 2 — “container seal discrepancy at gate”</div><p>OPS-201, first hit. Grader says <b>YES</b>. Answer delivered. <b>Nobody touched the manual or the model.</b></p></div>
+  </div>
+  <p class="note" style="margin-top:2.4cqw">Print the rewritten question inside the step. Students need to <b>see</b> the machine rephrase itself — that is the moment workflows stop being an abstraction and start being obviously useful.</p>
+  <div class="num">15</div>
+</section>
+
+<!-- 16 -->
+<section class="slide">
+  <h2>Now ask for something that <b>isn't there</b></h2>
+  <p>“What is the annual leave policy?” It rewrites. It fails. It rewrites. It fails. <b>Let it run until the workflow timeout fires</b>, and read that message together.</p>
+  <div class="grid g3">
+    <div class="card"><div class="stat">∞</div><div class="statlab">Laps it will happily do, because you never told it to stop.</div></div>
+    <div class="card"><div class="stat g">3</div><div class="statlab">API calls per lap — grade, rewrite, retrieve. Each one billed.</div></div>
+    <div class="card"><div class="stat g">2</div><div class="statlab">Lines that fix it, in the step you already wrote.</div></div>
+  </div>
+  <p class="note"><b>The timeout is a safety net, not a design.</b> Every loop needs a counter in Context and a ceiling in a step. <span class="r">The timeout catches a runaway after you have paid for it.</span></p>
+  <div class="num">16</div>
+</section>
+
+<!-- 17 -->
+<section class="slide">
+  <h2>The guard and the <b>honest exit</b></h2>
+  <pre>    <span class="fn">@step</span>
+    <span class="k">async def</span> <span class="fn">grade</span>(
+        self, ctx: Context, ev: GradeEvent
+    ) -&gt; GenerateEvent | RewriteEvent | StopEvent:     <span class="c"># one more exit</span>
+        ...
+        <span class="k">if</span> verdict.<span class="fn">startswith</span>(<span class="s">"YES"</span>):
+            <span class="k">return</span> <span class="fn">GenerateEvent</span>(chunks=ev.chunks)
+
+        attempts = <span class="k">await</span> ctx.store.<span class="fn">get</span>(<span class="s">"attempts"</span>)
+        <span class="k">if</span> attempts &gt;= <span class="n">3</span>:                             <span class="c"># the ceiling</span>
+            <span class="k">return</span> <span class="fn">StopEvent</span>(result=
+                <span class="s">"Not in the operations manual - escalate to the duty supervisor."</span>)
+        <span class="k">return</span> <span class="fn">RewriteEvent</span>()</pre>
+  <p class="note">Last week's refusal was a shrug. <b>This one is earned</b> — three different searches were tried before it said no, and the event stream can prove it.</p>
+  <div class="num">17</div>
+</section>
+
+<!-- 18 -->
+<section class="slide">
+  <h2>Look at what you <b>actually built</b></h2>
+  <pre><span class="k">from</span> llama_index.utils.workflow <span class="k">import</span> draw_all_possible_flows
+<span class="fn">draw_all_possible_flows</span>(SelfCorrectingRAG, filename=<span class="s">"rag_workflow.html"</span>)
+
+handler = workflow.<span class="fn">run</span>(question=<span class="s">"truck got the wrong sticker thing"</span>)
+<span class="k">async for</span> ev <span class="k">in</span> handler.<span class="fn">stream_events</span>():
+    <span class="fn">print</span>(<span class="fn">type</span>(ev).__name__)
+answer = <span class="k">await</span> handler</pre>
+  <div class="grid g2" style="margin-top:2cqw">
+    <div class="card"><div class="k">draw_all_possible_flows</div><p>A real diagram of every path, built from your type hints — so it <b>cannot go out of date.</b></p></div>
+    <div class="card hot"><div class="k">stream_events</div><p><span class="mono">Retrieve → Grade → Rewrite → Retrieve</span>. <b>The event stream is the debugger</b>, and it reads like a sentence.</p></div>
+  </div>
+  <div class="num">18</div>
+</section>
+
+<!-- 19 -->
+<section class="slide">
+  <h2>Six things that will <b>bite you</b></h2>
+  <ul>
+    <li><b>“Node” means chunk, not step.</b> Half the confusion in this room today traces back to this one word.</li>
+    <li><b>Forgetting <span class="mono">await</span> on ctx.store</b> → you store a coroutine instead of a value, and the error appears one step later.</li>
+    <li><b>No loop guard</b> → the timeout eventually fires, after you have paid for every lap.</li>
+    <li><b>Two steps accepting the same event type</b> → both run. Sometimes intended, usually a bug.</li>
+    <li><b>An event nobody accepts</b> → validation fails before anything runs. Read the message; it names the orphan.</li>
+    <li><b>Loop state kept in an event</b> instead of Context → it resets every lap and your counter never grows.</li>
+  </ul>
+  <div class="num">19</div>
+</section>
+
+<!-- 20 -->
+<section class="slide">
+  <h2>Homework — add a <b>third road</b></h2>
+  <p><b>Scenario:</b> some questions are too vague to search at all. “help”, “problem lah”, “what about the thing”. Rewriting them is guessing. Asking back is correct.</p>
+  <div class="grid g2">
+    <div class="card"><div class="k">Part A — build (60%)</div><p><b>A1</b> Add a <span class="mono">ClarifyEvent</span> and the step that handles it<br><b>A2</b> Route to it when the question is too thin to search<br><b>A3</b> Make sure it does <b>not</b> burn an attempt<br><b>A4</b> Put your <span class="mono">draw_all_possible_flows</span> output in the README</p></div>
+    <div class="card hot"><div class="k">Part B — break (40%)</div><p><b>B1</b> One question that <b>only</b> works because of the rewrite loop — paste both laps from the event stream<br><b>B2</b> One question where the <b>grader is wrong</b> — says YES on chunks that don't answer it. Explain why<br><b>B3</b> Your ceiling, and one sentence on why that number</p></div>
+  </div>
+  <p class="note"><b>Submit:</b> the script plus a short README. <span class="r">B2 is the hardest mark on the sheet</span> — a grader you cannot fool is not a grader you have tested.</p>
+  <div class="num">20</div>
+</section>
+
+<!-- 21 -->
+<section class="slide">
+  <h2>Take this home</h2>
+  <ol>
+    <li><b>Five lines are a demo; the loop is the product.</b> The convenience layer is worth using precisely because you know what sits under it.</li>
+    <li><b class="r">In LlamaIndex, types are the wiring.</b> No arrows to draw — say what a step accepts and what it returns, and the shape of the program follows.</li>
+    <li><b>“I couldn't find it” is worth more when it's earned.</b> Three genuine attempts, and an event stream that can show you all three.</li>
+  </ol>
+  <p class="note" style="margin-top:3cqw"><b>Next session:</b> keeping the Context between runs so the assistant remembers a conversation — and human-in-the-loop, where the workflow <b>pauses and waits for a person to approve</b> before it does anything that matters.</p>
+  <div class="num">21</div>
+</section>
+
+</div>
+
+<div class="bar">
+  <button id="prev">← Prev</button>
+  <div class="prog"><i id="prog"></i></div>
+  <button id="next">Next →</button>
+  <button id="full">Fullscreen</button>
+</div>
+<div class="hint">← → or space to navigate · F for fullscreen</div>
+
+<script>
+const s=[...document.querySelectorAll('.slide')];let i=0;
+const prog=document.getElementById('prog');
+function go(n){i=Math.max(0,Math.min(s.length-1,n));s.forEach((el,k)=>el.classList.toggle('on',k===i));
+  prog.style.width=((i+1)/s.length*100)+'%';}
+go(0);
+document.getElementById('next').onclick=()=>go(i+1);
+document.getElementById('prev').onclick=()=>go(i-1);
+document.getElementById('full').onclick=()=>document.getElementById('deck').requestFullscreen?.();
+addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '){e.preventDefault();go(i+1)}
+  if(e.key==='ArrowLeft')go(i-1);
+  if(e.key.toLowerCase()==='f')document.getElementById('deck').requestFullscreen?.();
+});
+let x0=null;const d=document.getElementById('deck');
+d.addEventListener('touchstart',e=>x0=e.touches[0].clientX,{passive:true});
+d.addEventListener('touchend',e=>{if(x0===null)return;
+  const dx=e.changedTouches[0].clientX-x0;if(Math.abs(dx)>45)go(dx<0?i+1:i-1);x0=null;});
+</script>
